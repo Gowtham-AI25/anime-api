@@ -1,0 +1,18 @@
+# Local environment
+apienv/
+venv/
+.venv/
+env/
+
+# Secrets and Configuration
+.env
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS Specific
+.DS_Store
+Thumbs.db
