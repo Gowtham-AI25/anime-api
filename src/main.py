@@ -142,10 +142,34 @@ async def get_anime_by_letter(
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
 @app.get("/anime/debug/test")
-async def debug():
+async def debug_supabase():
     try:
-        count = supabase.table("anime_metadata").select("count", count="exact").execute()
-        data = supabase.table("anime_metadata").select("*").limit(2).execute()
-        return {"count": count.count, "sample": data.data}
+        # Test 1: Does table exist + row count?
+        count_response = supabase.table("anime_metadata").select("count", count="exact").execute()
+        
+        # Test 2: Get first 3 rows
+        sample_data = supabase.table("anime_metadata").select("*").limit(3).execute()
+        
+        # Test 3: Your exact search logic
+        search_test = supabase.table("anime_metadata").ilike("title", "%naruto%").limit(1).execute()
+        
+        # Test 4: Check your other table
+        az_count = supabase.table("anime_by_letter").select("count", count="exact").execute()
+        
+        return {
+            "anime_metadata_table": {
+                "total_rows": count_response.count,
+                "sample_data": sample_data.data[:1]  # First row only
+            },
+            "anime_by_letter_table": {
+                "total_rows": az_count.count
+            },
+            "search_test_naruto": search_test.data,
+            "connection": "✅ WORKING",
+            "service_role_key": "✅ SET" if key else "❌ MISSING"
+        }
     except Exception as e:
-        return {"error": str(e)}
+        return {
+            "error": str(e),
+            "error_type": str(type(e).__name__)
+        }
