@@ -141,7 +141,7 @@ async def get_anime_by_letter(
         print(f"Directory Error: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
-@app.get("/anime/debug")
+@app.get("/anime/debug/test")
 async def debug():
     try:
         count = supabase.table("anime_metadata").select("count", count="exact").execute()
