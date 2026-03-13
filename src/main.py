@@ -4,11 +4,31 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import re
 from fastapi import Query, Path
+from fastapi.middleware.cors import CORSMiddleware  # 1. Import the middleware
+
 
 # Load variables
 load_dotenv()
 
-app = FastAPI(title="Anime Metadata API")
+app = FastAPI()
+
+# 2. Define who is allowed to talk to your API
+origins = [
+    "http://127.0.0.1:5500",  # Your local Live Server
+    "http://localhost:5500",   # Sometimes browsers use 'localhost' instead
+    "https://your-app-name.onrender.com", # Add your Render URL here for later
+]
+
+# 3. Add the middleware to your app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows GET, POST, etc.
+    allow_headers=["*"],  # Allows all headers
+)
+
+# ... your existing routes below ...
 
 # 1. Get your Supabase credentials
 # Note: Use the ANON_KEY or SERVICE_ROLE_KEY from your dashboard
@@ -173,3 +193,82 @@ async def debug_supabase():
             "error": str(e),
             "error_type": str(type(e).__name__)
         }
+
+@app.get("/anime/home/trending")
+async def get_trending_anime(
+    page: int = Query(1, ge=1, description="The page number to fetch"),
+    page_size: int = Query(30, ge=1, le=50, description="Items per page")
+):
+    """
+    Fetches the highest-rated anime (trending) based on score.
+    """
+    try:
+        # Calculate pagination range
+        start = (page - 1) * page_size
+        end = (page * page_size) - 1
+
+        # Query Supabase: Sort by 'score' descending
+        # We also filter where score is not null to ensure quality results
+        response = (
+            supabase.table("anime_metadata")
+            .select("*")
+            .not_.is_("score", "null")
+            .order("score", desc=True)
+            .range(start, end)
+            .execute()
+        )
+
+        return {
+            "page": page,
+            "page_size": page_size,
+            "results": response.data
+        }
+
+    except Exception as e:
+        print(f"Error fetching trending anime: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch trending anime")
+    
+
+@app.get("/anime/home/home_content")
+async def get_home_layout():
+    """
+    Aggregator endpoint for the Home Page.
+    Returns 8 'Fresh' (Recent 2025) and 4 'Trending' (Top Rated) anime.
+    """
+    try:
+        # 1. Fetch Fresh
+        fresh_res = (
+            supabase.table("anime_metadata")
+            .select("*, anime_genres(genre)")
+            .eq("year", 2025)
+            .limit(8)
+            .execute()
+        )
+
+        # 2. Fetch Trending
+        trending_res = (
+            supabase.table("anime_metadata")
+            .select("*, anime_genres(genre)")
+            .not_.is_("score", "null")
+            .order("score", desc=True)
+            .limit(4)
+            .execute()
+        )
+
+        # Transformation Function
+        def transform_anime(anime_list):
+            for anime in anime_list:
+                # Extract just the string from the list of objects
+                if "anime_genres" in anime:
+                    anime["genres"] = [g["genre"] for g in anime["anime_genres"]]
+                    # Clean up the old nested key
+                    del anime["anime_genres"]
+            return anime_list
+
+        return {
+            "fresh": transform_anime(fresh_res.data),
+            "trending": transform_anime(trending_res.data)
+        }
+    except Exception as e:
+        print(f"Home Aggregator Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load home screen data")
